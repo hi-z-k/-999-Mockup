@@ -2,6 +2,7 @@
 
 DATA_FILE="./data.txt"
 PAGES_FILE="./pages.txt"
+HISTORY_FILE="./history.txt"
 
 get_balance() {
     if [ ! -f "$DATA_FILE" ]; then
@@ -22,10 +23,61 @@ deduct_balance() {
     return 0
 }
 
+log_transaction() {
+    local price="$1"
+    local desc="$2"
+    local balance_after="$3"
+
+    # Determine package type
+    local pkg_type=""
+    if [[ "$desc" =~ _Daily$ || "$desc" =~ Daily$ ]]; then
+        pkg_type="Daily"
+    elif [[ "$desc" =~ _Weekly$ || "$desc" =~ Weekly$ ]]; then
+        pkg_type="Weekly"
+    elif [[ "$desc" =~ _Monthly$ || "$desc" =~ Monthly$ ]]; then
+        pkg_type="Monthly"
+    else
+        pkg_type="Other"
+    fi
+
+    # Remove trailing type suffix from package name
+    local pkg_name="${desc%_Daily}"
+    pkg_name="${pkg_name%_Weekly}"
+    pkg_name="${pkg_name%_Monthly}"
+
+    local datetime=$(date "+%Y-%m-%d %H:%M:%S")
+    local line="[$datetime, $pkg_type, $pkg_name, $price, $balance_after]"
+    echo "$line" >> "$HISTORY_FILE"
+}
+
+show_history() {
+    if [ ! -f "$HISTORY_FILE" ]; then
+        echo "No transactions yet."
+        return
+    fi
+
+    echo "Date                 | Time     | Type    | Package         | Price | Balance"
+    echo "---------------------|----------|---------|-----------------|-------|--------"
+
+    while IFS= read -r line; do
+        line="${line#[}"
+        line="${line%]}"
+        IFS=',' read -r date time type name price balance <<< "$line"
+        date=$(echo "$date" | xargs)
+        time=$(echo "$time" | xargs)
+        type=$(echo "$type" | xargs)
+        name=$(echo "$name" | xargs)
+        price=$(echo "$price" | xargs)
+        balance=$(echo "$balance" | xargs)
+        printf "%-19s | %-8s | %-7s | %-15s | %5s | %7s\n" "$date" "$time" "$type" "$name" "$price" "$balance"
+    done < "$HISTORY_FILE"
+
+    echo "---------------------|----------|---------|-----------------|-------|--------"
+}
+
 menu() {
     local page_name="$1"
 
-    # Use awk with state machine: toggle block capture on each "###"
     local block=$(awk -v name="$page_name" '
         /^###$/ { in_block = !in_block; if (!in_block && block ~ "name: "name) print block; block=""; next }
         in_block { block = block $0 "\n" }
@@ -47,7 +99,6 @@ menu() {
         exit 1
     fi
 
-    # ---- Display goes to stderr (>&2) ----
     echo "--------------------------" >&2
     echo "      ETHIO TELECOM       " >&2
     echo "  Balance: $(get_balance) Br. " >&2
@@ -62,7 +113,6 @@ menu() {
     
     choice=$(echo "$choice" | xargs)
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#opt_array[@]}" ]; then
-        # ---- Only the action is printed to stdout ----
         echo "${act_array[$((choice-1))]}" | xargs
     else
         echo "INVALID"

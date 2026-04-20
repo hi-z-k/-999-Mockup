@@ -25,6 +25,8 @@ while true; do
             price=$(echo "$action" | cut -d':' -f2)
             desc=$(echo "$action" | cut -d':' -f3)
             if deduct_balance "$price"; then
+                new_balance=$(get_balance)
+                log_transaction "$price" "$desc" "$new_balance"
                 echo -e "\nPurchase Successful: $desc ($price Birr)"
             else
                 echo -e "\nError: Your balance is too low."
@@ -38,8 +40,8 @@ while true; do
             read -p "Press Enter to return..."
             ;;
         HIST:show)
-            echo -e "\n--- HISTORY ---"
-            echo "Purchase history not yet implemented."
+            echo -e "\n--- TRANSACTION HISTORY ---"
+            show_history
             read -p "Press Enter to return..."
             ;;
         EXIT:*)
